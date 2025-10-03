@@ -3,7 +3,7 @@ from setuptools import setup
 with open('requirements.txt') as f:
     requirements = f.read().splitlines()
 
-setup(name='SciDx-rexec',
+setup(name='SciDx-rexec-test',
       version='0.0.4',
       description='Client library for SciDX Remote Execution',
       long_description="Client library for remote execution capabilities in "
@@ -12,9 +12,9 @@ setup(name='SciDx-rexec',
                        "to python programmer (including jupyter notebook) to execute "
                        "arbitary user-defined functions on the remote Points-of-Presence (PoPs).",
       long_description_content_type="text/x-rst",
-      author='Bo Zhang',
-      author_email='bozhang@sci.utah.edu',
-      url='https://github.com/bozhang-hpc/SciDx-rexec',
+      author='Yutian Qin',
+      author_email='yutianqinx@gmail.com',
+      url='https://github.com/sci-ndp/SciDx-rexec',
       install_requires=requirements,
       packages=['rexec'],
      )

@@ -1,3 +1,4 @@
+import jwt
 import packaging.requirements
 import packaging.version
 import packaging.specifiers
@@ -39,7 +40,7 @@ class remote_func:
         cls.rexec_api_url = url
         
     @classmethod
-    def set_environment(cls, filename):
+    def set_environment(cls, filename, usr_token=None):
         requirements = []
         with open(filename, 'r') as fd:
             for line in fd:
@@ -57,8 +58,22 @@ class remote_func:
                             packaging.specifiers.Specifier(req.specifier.__str__()).operator != "==")):
                             raise packaging.requirements.InvalidRequirement(f"We only support an exact Python version specification. For example: python==3.13")
                         requirements.append(req_str)
+        if usr_token:
+            jwks_url = "https://idp-test.nationaldataplatform.org/realms/NDP/protocol/openid-connect/certs"
+            jwks_client = jwt.PyJWKClient(jwks_url)
+            signing_key = jwks_client.get_signing_key_from_jwt(usr_token)
+            decoded = jwt.decode(
+                usr_token,
+                signing_key.key,            # RSA public key
+                algorithms=["RS256"],
+                audience="account",         # matches the "aud" claim in the token
+                issuer="https://idp-test.nationaldataplatform.org/realms/NDP"
+            )
+            usr_id = decoded["sub"]
+        else:
+            raise RuntimeError("Token is required to set up the R-Exec environment.")
 
-        response = requests.post(cls.rexec_api_url, data={"requirments": requirements})
+        response = requests.post(cls.rexec_api_url, data={"requirments": requirements, "user_id": usr_id})
         if response.status_code == 404:
             raise RuntimeError(f"R-Exec API url not found.")
         if not response.ok:
