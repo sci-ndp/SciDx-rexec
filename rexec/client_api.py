@@ -40,7 +40,7 @@ class remote_func:
         cls.rexec_api_url = url
         
     @classmethod
-    def set_environment(cls, filename, usr_id=None):
+    def set_environment(cls, filename, usr_token=None):
         requirements = []
         with open(filename, 'r') as fd:
             for line in fd:
@@ -59,7 +59,10 @@ class remote_func:
                             raise packaging.requirements.InvalidRequirement(f"We only support an exact Python version specification. For example: python==3.13")
                         requirements.append(req_str)
 
-        response = requests.post(cls.rexec_api_url, data={"requirments": requirements, "user_id": usr_id})
+        payload = {"requirments": requirements}
+        if usr_token is not None:
+            payload["token"] = usr_token
+        response = requests.post(cls.rexec_api_url, data=payload)
         if response.status_code == 404:
             raise RuntimeError(f"R-Exec API url not found.")
         if not response.ok:
