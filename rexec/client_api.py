@@ -26,6 +26,7 @@ class remote_func:
     broker_addr = None
     broker_port = "5559"
     rexec_api_url = None
+    exec_token = None
 
     @classmethod
     def set_remote_addr(cls, addr):
@@ -38,6 +39,10 @@ class remote_func:
     @classmethod
     def set_api_url(cls, url):
         cls.rexec_api_url = url
+
+    @classmethod
+    def set_exec_token(cls, token):
+        cls.exec_token = token
         
     @classmethod
     def set_environment(cls, filename, usr_token=None):
@@ -62,6 +67,7 @@ class remote_func:
         payload = {"requirments": requirements}
         if usr_token is not None:
             payload["token"] = usr_token
+            cls.exec_token = usr_token
         response = requests.post(cls.rexec_api_url, data=payload)
         if response.status_code == 404:
             raise RuntimeError(f"R-Exec API url not found.")
@@ -73,8 +79,11 @@ class remote_func:
             self.func = func
 
     def __call__(self, *args):
+        if not self.exec_token:
+            raise RuntimeError("Execution token not set; call set_environment or set_exec_token.")
         pfn = dill.dumps(self.func)
         pargs = dill.dumps(args)
+        token = self.exec_token.encode("utf-8")
 
         zmq_context = zmq.Context()
         zmq_socket = zmq_context.socket(zmq.REQ)
@@ -82,9 +91,11 @@ class remote_func:
 
         zmq_socket.connect(zmq_addr)
 
-        zmq_mp_msg = [pfn, pargs]
+        # Send serialized func and arg
+        zmq_mp_msg = [token, pfn, pargs]
         zmq_socket.send_multipart(zmq_mp_msg)
 
+        # Receive serialized return msg
         zmq_ret_msg = zmq_socket.recv()
         ret_msg = dill.loads(zmq_ret_msg)
 
