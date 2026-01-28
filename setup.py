@@ -4,7 +4,7 @@ with open('requirements.txt') as f:
     requirements = f.read().splitlines()
 
 setup(name='scidx-rexec',
-      version='0.0.6',
+      version='0.0.7',
       description='Client library for SciDX Remote Execution',
       long_description="Client library for remote execution capabilities in "
                        "SciDx software stack with the support to DataSpaces "
