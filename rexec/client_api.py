@@ -73,6 +73,7 @@ class remote_func:
             raise RuntimeError(f"R-Exec API url not found.")
         if not response.ok:
             raise RuntimeError(f"Failed to send requirement.txt to R-Exec API.")
+        return response
 
     def __init__(self, func=None):
         if func is not None:
