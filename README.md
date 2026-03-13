@@ -1,4 +1,7 @@
 # SciDx Remote Execution
+
+[![PyPI version](https://badge.fury.io/py/scidx-rexec.svg)](https://badge.fury.io/py/scidx-rexec)
+
 Client library for remote execution capabilities in [SciDx software stack](https://scidx.sci.utah.edu/) with the support to [DataSpaces](https://dataspaces.sci.utah.edu/) Data Staging framework. It provides a simple user interface to python programmer (including jupyter notebook) to execute arbitary user-defined functions on the remote Points-of-Presence (PoPs).
 
 ## Requirements
