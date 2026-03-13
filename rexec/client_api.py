@@ -1,4 +1,3 @@
-import jwt
 import packaging.requirements
 import packaging.version
 import packaging.specifiers
@@ -7,6 +6,7 @@ import sys
 import zmq
 import requests
 import dxspaces
+from .exec_stream import ExecStream
 
 def parse_requirements(filename):
     with open(filename, 'r') as fd:
@@ -46,6 +46,10 @@ class remote_func:
         
     @classmethod
     def set_environment(cls, filename, usr_token=None):
+        """
+        Spawn a remote execution server of required environment dependencies 
+        by sending the requirements.txt to the R-Exec API.
+        """
         requirements = []
         with open(filename, 'r') as fd:
             for line in fd:
@@ -75,33 +79,84 @@ class remote_func:
             raise RuntimeError(f"Failed to send requirement.txt to R-Exec API.")
         return response
 
+
     def __init__(self, func=None):
         if func is not None:
             self.func = func
 
-    def __call__(self, *args):
+
+    def _prepare_invocation(self, *args):
+        """
+        Prepare the remote execution request by serializing the function and its arguments,
+        and send the request to the R-Exec broker;
+        Return a ExecStream iterator to receive the stream of messages from the server(through broker).
+        """
         if not self.exec_token:
             raise RuntimeError("Execution token not set; call set_environment or set_exec_token.")
+        
+        # Prepare zmq payload for remote execution request; 
+        # the payload includes the serialized function, its arguments 
+        # and an execution token for authentication/authorization.
         pfn = dill.dumps(self.func)
         pargs = dill.dumps(args)
         token = self.exec_token.encode("utf-8")
 
+        # Prepare zmq socket for remote execution request; 
+        # use a DEALER socket to preserve ROUTER envelope framing on the server side,
+        # the server will reply with a stream of messages for each request
         zmq_context = zmq.Context()
-        zmq_socket = zmq_context.socket(zmq.REQ)
+        zmq_socket = zmq_context.socket(zmq.DEALER)
         zmq_addr = "tcp://" + self.broker_addr + ":" + self.broker_port
 
         zmq_socket.connect(zmq_addr)
 
-        # Send serialized func and arg
-        zmq_mp_msg = [token, pfn, pargs]
-        zmq_socket.send_multipart(zmq_mp_msg)
+        # Send the remote execution request to the R-Exec broker;
+        # Preserve ROUTER envelope framing by adding explicit delimiter.
+        zmq_socket.send_multipart([b"", token, pfn, pargs])
+        return ExecStream(zmq_context, zmq_socket, zmq_addr, token)
 
-        # Receive serialized return msg
-        zmq_ret_msg = zmq_socket.recv()
-        ret_msg = dill.loads(zmq_ret_msg)
 
-        zmq_socket.disconnect(zmq_addr)
-        zmq_socket.close()
-        zmq_context.destroy()
-
-        return ret_msg
+    def __call__(self, *args):
+        return_data = None
+        has_return = False
+        exec_stream_iter = self._prepare_invocation(*args)
+        try:
+            for event in exec_stream_iter:
+                # Handle non-dict messages
+                # (e.g., a simple string message from the broker)
+                if not isinstance(event, dict):
+                    if isinstance(event, str):
+                        sys.stdout.write(event)
+                        if not event.endswith("\n"):
+                            sys.stdout.write("\n")
+                        sys.stdout.flush()
+                    else:
+                        return_data = event
+                        has_return = True
+                    continue
+                # Handle special event types for remote stdout stream;
+                # print stdout events from the remote execution server to local stdout in real time
+                if event.get("channel") == "stdout":
+                    sys.stdout.write(event.get("data", ""))
+                    sys.stdout.flush()
+                # Handle stderr stream events; for example:
+                # capture error messages from the remote execution and print them to local stderr
+                elif event.get("channel") == "stderr":
+                    sys.stderr.write(event.get("data", ""))
+                    sys.stderr.flush()
+                # Handle a special event type for remote execution return value
+                # capture the remote execution return val and save it to return_data local var
+                elif event.get("channel") == "return":
+                    return_data = event.get("data")
+                    has_return = True
+                else:
+                    continue
+        # Handle KeyboardInterrupt in the client side
+        except KeyboardInterrupt:
+            exec_stream_iter.keyboard_interrupt()
+            raise
+        finally:
+            exec_stream_iter.close()
+        # If the remote_func has a return value,
+        # return it to caller
+        if has_return: return return_data
