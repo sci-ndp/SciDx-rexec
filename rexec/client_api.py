@@ -80,6 +80,23 @@ class remote_func:
         return response
 
 
+    @classmethod
+    def terminate_environment(cls, api_url, usr_token=None):
+        """
+        Terminate (delete) the user's remote execution server by sending a
+        DELETE request to the R-Exec API.
+        """
+        token = usr_token or cls.exec_token
+        if not token:
+            raise RuntimeError("Execution token not set; call set_environment or set_exec_token.")
+        response = requests.delete(api_url, data={"token": token})
+        if response.status_code == 404:
+            raise RuntimeError(f"R-Exec API url not found.")
+        if not response.ok:
+            raise RuntimeError(f"Failed to terminate remote execution server.")
+        return response
+
+
     def __init__(self, func=None):
         if func is not None:
             self.func = func
