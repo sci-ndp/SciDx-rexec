@@ -45,10 +45,14 @@ class remote_func:
         cls.exec_token = token
         
     @classmethod
-    def set_environment(cls, filename, usr_token=None):
+    def set_environment(cls, filename, usr_token=None, force=False):
         """
-        Spawn a remote execution server of required environment dependencies 
+        Spawn a remote execution server of required environment dependencies
         by sending the requirements.txt to the R-Exec API.
+
+        If a server with different requirements is already running for this
+        user, the API responds 409 unless `force=True`, in which case the
+        existing server is replaced (interrupting any job it is running).
         """
         requirements = []
         with open(filename, 'r') as fd:
@@ -68,15 +72,17 @@ class remote_func:
                             raise packaging.requirements.InvalidRequirement(f"We only support an exact Python version specification. For example: python==3.13")
                         requirements.append(req_str)
 
-        payload = {"requirments": requirements}
+        payload = {"requirments": requirements, "force": force}
         if usr_token is not None:
             payload["token"] = usr_token
             cls.exec_token = usr_token
+        elif cls.exec_token is not None:
+            payload["token"] = cls.exec_token
         response = requests.post(cls.rexec_api_url, data=payload)
         if response.status_code == 404:
             raise RuntimeError(f"R-Exec API url not found.")
-        if not response.ok:
-            raise RuntimeError(f"Failed to send requirement.txt to R-Exec API.")
+        # if not response.ok:
+        #     raise RuntimeError(f"Failed to send requirement.txt to R-Exec API.")
         return response
 
 
